@@ -4,8 +4,18 @@ rd
 rd is a tool for recording and searching recently accessed directories.
 Currently only supports Linux.
 
+### Installation
+
+If you have Go installed and your path set up so that $GOPATH/bin is
+included in your path:
+
 ```
-Usage:
+	go get github.com/robertknight/rd
+```
+
+### Usage
+
+```
 	1. rd -daemon
 	2. rd <pattern>
 
@@ -19,8 +29,7 @@ Output:
 	<id> <path>
 ```
 
-Design
-------
+### Design
 
 rd is a client/server app consisting of a daemon which monitors
 usage of recently accessed dirs by different processes and a client
