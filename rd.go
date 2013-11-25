@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"net/rpc"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -31,7 +32,7 @@ func (poller *currentDirPoller) Events() chan DirUseEvent {
 }
 
 func (poller *currentDirPoller) Run() {
-	tick := time.Tick(2 * time.Second)
+	tick := time.Tick(5 * time.Second)
 	for _ = range tick {
 		procs := scanProcs()
 		for _, procInfo := range procs {
@@ -49,13 +50,13 @@ func newCurrentDirPoller() currentDirPoller {
 
 type Query struct {
 	query     string
-	replyChan chan []string
+	replyChan chan []DirUsage
 }
 
-type DirId struct {
-	Id   int
-	Path string
-	Time time.Time
+type DirUsage struct {
+	Id         int
+	Path       string
+	AccessTime time.Time
 }
 
 type RecentDirServer struct {
@@ -69,10 +70,11 @@ type RecentDirServer struct {
 	// and responds with info about matching directories
 	queryChan chan Query
 
-	// map of (id -> path) for recent responses
-	// to queries. Used to keep the ID for a given
-	// path valid for a period of time
-	dirIds []DirId
+	// map of (path -> usage info) for
+	// recently used dirs
+	recentDirs map[string]DirUsage
+
+	store recentDirStore
 }
 
 func NewRecentDirServer() RecentDirServer {
@@ -84,6 +86,8 @@ func NewRecentDirServer() RecentDirServer {
 	}
 	server.eventChan = make(chan DirUseEvent)
 	server.queryChan = make(chan Query)
+	server.store = NewRecentDirStore(os.ExpandEnv("$HOME/.rd-history"))
+	server.recentDirs = server.store.Load()
 
 	for _, source := range server.sources {
 		go func() {
@@ -96,71 +100,79 @@ func NewRecentDirServer() RecentDirServer {
 	return server
 }
 
-func (server *RecentDirServer) findDirId(id int) *DirId {
-	for _, dir := range server.dirIds {
-		if dir.Id == id {
-			return &dir
+func (server *RecentDirServer) findDirUsage(id int) *DirUsage {
+	for _, usage := range server.recentDirs {
+		if usage.Id == id {
+			return &usage
 		}
 	}
 	return nil
 }
 
-func (server *RecentDirServer) expireDirIds() {
-	const ID_EXPIRY = 10 * time.Second
-	newDirIds := []DirId{}
-	now := time.Now()
-	for _, dir := range server.dirIds {
-		if now.Sub(dir.Time) < ID_EXPIRY {
-			newDirIds = append(newDirIds, dir)
-		}
-	}
-	server.dirIds = newDirIds
-}
-
-func (server *RecentDirServer) Query(queryStr string, reply *[]DirId) error {
-	*reply = []DirId{}
+func (server *RecentDirServer) Query(queryStr string, reply *[]DirUsage) error {
 	query := Query{
 		query:     queryStr,
-		replyChan: make(chan []string),
+		replyChan: make(chan []DirUsage),
 	}
 	server.queryChan <- query
-	dirs := <-query.replyChan
+	*reply = <-query.replyChan
+	return nil
+}
 
-	server.expireDirIds()
-	for _, dir := range dirs {
-		var dirId *DirId
-		for _, existingDirId := range server.dirIds {
-			if existingDirId.Path == dir {
-				dirId = &existingDirId
+func (server *RecentDirServer) maxId() int {
+	maxId := 0
+	for _, usage := range server.recentDirs {
+		if usage.Id > maxId {
+			maxId = usage.Id
+		}
+	}
+	return maxId
+}
+
+func (server *RecentDirServer) queryMatch(query string, candidate DirUsage) bool {
+	id, err := strconv.Atoi(query)
+	if err == nil {
+		return id != 0 && candidate.Id == id
+	} else {
+		parts := strings.Split(query, " ")
+		matchedParts := 0
+		for _, part := range parts {
+			if strings.Contains(strings.ToLower(candidate.Path),
+				strings.ToLower(part)) {
+				matchedParts++
+			} else {
 				break
 			}
 		}
-		if dirId == nil {
-			newDirId := DirId{Id: len(server.dirIds), Path: dir, Time: time.Now()}
-			server.dirIds = append(server.dirIds, newDirId)
-			dirId = &newDirId
-		}
-		*reply = append(*reply, *dirId)
+		return matchedParts == len(parts)
 	}
-
-	return nil
 }
 
 func (server *RecentDirServer) serve() {
-	events := []DirUseEvent{}
+	saveTicker := time.Tick(5 * time.Second)
 	for {
 		select {
 		case newEvent := <-server.eventChan:
-			events = append(events, newEvent)
+			dirUsage, ok := server.recentDirs[newEvent.Dir]
+			if !ok {
+				dirUsage = DirUsage{
+					Path: newEvent.Dir,
+				}
+				log.Printf("recording new dir %s (total: %d)", newEvent.Dir, len(server.recentDirs)+1)
+			}
+			dirUsage.AccessTime = time.Now()
+			server.recentDirs[newEvent.Dir] = dirUsage
+		case _ = <-saveTicker:
+			server.store.Save(server.recentDirs)
 		case query := <-server.queryChan:
-			result := []string{}
-			seenDirs := map[string]bool{}
-
-			for _, event := range events {
-				if strings.Contains(event.Dir, query.query) &&
-					!seenDirs[event.Dir] {
-					result = append(result, event.Dir)
-					seenDirs[event.Dir] = true
+			result := []DirUsage{}
+			for dir, usage := range server.recentDirs {
+				if server.queryMatch(query.query, usage) {
+					if usage.Id == 0 {
+						usage.Id = server.maxId() + 1
+						server.recentDirs[dir] = usage
+					}
+					result = append(result, usage)
 				}
 			}
 			query.replyChan <- result
@@ -170,20 +182,27 @@ func (server *RecentDirServer) serve() {
 
 func main() {
 	daemonFlag := flag.Bool("daemon", false, "Start rd in daemon mode")
-	tcpPortStr := ":1234"
 	flag.Parse()
 
+	connType := "unix"
+	connAddr := os.ExpandEnv("$HOME/.rd.sock")
+
 	if *daemonFlag {
+		err := os.Remove(connAddr)
+		if err != nil && !os.IsNotExist(err) {
+			log.Fatalf("Unable to remove socket - %v", err)
+		}
+
 		// server operation
 		server := NewRecentDirServer()
 		go server.serve()
-		rpc.Register(&server)
-		rpc.HandleHTTP()
-		listener, err := net.Listen("tcp", tcpPortStr)
+		rpcServer := rpc.NewServer()
+		rpcServer.Register(&server)
+		listener, err := net.Listen(connType, connAddr)
 		if err != nil {
 			log.Fatal("Listen error:", err)
 		}
-		http.Serve(listener, nil)
+		rpcServer.Accept(listener)
 	} else {
 		// client operation
 		if flag.NArg() < 1 {
@@ -191,17 +210,17 @@ func main() {
 			return
 		}
 
-		client, err := rpc.DialHTTP("tcp", tcpPortStr)
+		client, err := rpc.Dial(connType, connAddr)
 		if err != nil {
 			fmt.Printf("Unable to connect to rd daemon: %v\n", err)
 			return
 		}
 
-		query := flag.Arg(0)
-		reply := []DirId{}
+		query := strings.Join(flag.Args(), " ")
+		reply := []DirUsage{}
 		err = client.Call("RecentDirServer.Query", query, &reply)
 		if err != nil {
-			fmt.Printf("Failed to connect to RD server\n")
+			fmt.Printf("Failed to connect to RD server: %v\n", err)
 			return
 		}
 
