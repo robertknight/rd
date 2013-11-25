@@ -299,21 +299,28 @@ func main() {
 		// client operation
 		if flag.NArg() < 1 {
 			fmt.Println("No query given")
-			return
+			os.Exit(1)
 		}
 
 		client, err := rpc.Dial(connType, connAddr)
 		if err != nil {
-			fmt.Printf("Unable to connect to rd daemon: %v\n", err)
-			return
+			fmt.Printf(
+				`
+Unable to connect to the rd daemon.
+ 
+Use 'rd -daemon' to start it.
+This should be set up to run at login.
+ 
+`)
+			os.Exit(1)
 		}
 
 		query := strings.Join(flag.Args(), " ")
 		reply := []QueryMatch{}
 		err = client.Call("RecentDirServer.Query", query, &reply)
 		if err != nil {
-			fmt.Printf("Failed to connect to RD server: %v\n", err)
-			return
+			fmt.Printf("Failed to query the rd daemon: %v\n", err)
+			os.Exit(1)
 		}
 
 		if len(reply) == 1 {
