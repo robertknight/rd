@@ -50,13 +50,23 @@ func newCurrentDirPoller() currentDirPoller {
 
 type Query struct {
 	query     string
-	replyChan chan []DirUsage
+	replyChan chan []QueryMatch
 }
 
 type DirUsage struct {
-	Id         int
 	Path       string
 	AccessTime time.Time
+}
+
+type MatchOffset struct {
+	Start  int
+	Length int
+}
+
+type QueryMatch struct {
+	Id           int
+	Dir          DirUsage
+	MatchOffsets []MatchOffset
 }
 
 type RecentDirServer struct {
@@ -74,6 +84,11 @@ type RecentDirServer struct {
 	// recently used dirs
 	recentDirs map[string]DirUsage
 
+	// map of (path -> ID) from the last pattern
+	// query. The list of IDs is reset after
+	// each new incoming pattern query
+	pathIds map[string]int
+
 	store recentDirStore
 }
 
@@ -88,6 +103,7 @@ func NewRecentDirServer() RecentDirServer {
 	server.queryChan = make(chan Query)
 	server.store = NewRecentDirStore(os.ExpandEnv("$HOME/.rd-history"))
 	server.recentDirs = server.store.Load()
+	server.pathIds = make(map[string]int)
 
 	for _, source := range server.sources {
 		go func() {
@@ -100,52 +116,115 @@ func NewRecentDirServer() RecentDirServer {
 	return server
 }
 
-func (server *RecentDirServer) findDirUsage(id int) *DirUsage {
-	for _, usage := range server.recentDirs {
-		if usage.Id == id {
-			return &usage
+func (server *RecentDirServer) findPathById(findId int) string {
+	for path, id := range server.pathIds {
+		if id == findId {
+			return path
 		}
 	}
-	return nil
+	return ""
 }
 
-func (server *RecentDirServer) Query(queryStr string, reply *[]DirUsage) error {
+func (server *RecentDirServer) Query(queryStr string, reply *[]QueryMatch) error {
 	query := Query{
 		query:     queryStr,
-		replyChan: make(chan []DirUsage),
+		replyChan: make(chan []QueryMatch),
 	}
 	server.queryChan <- query
 	*reply = <-query.replyChan
 	return nil
 }
 
-func (server *RecentDirServer) maxId() int {
-	maxId := 0
-	for _, usage := range server.recentDirs {
-		if usage.Id > maxId {
-			maxId = usage.Id
+func (server *RecentDirServer) assignId(path string) int {
+	for existingPath, id := range server.pathIds {
+		if existingPath == path {
+			return id
 		}
 	}
-	return maxId
+	id := len(server.pathIds) + 1
+	server.pathIds[path] = id
+	return id
 }
 
-func (server *RecentDirServer) queryMatch(query string, candidate DirUsage) bool {
-	id, err := strconv.Atoi(query)
-	if err == nil {
-		return id != 0 && candidate.Id == id
+// returns the components in a dir path up to and including
+// the last part which is included in a match
+func matchedPrefix(path string, matches []MatchOffset) string {
+	matchEnd := 0
+	for _, offset := range matches {
+		end := offset.Start + offset.Length
+		if end > matchEnd {
+			matchEnd = end
+		}
+	}
+
+	pathSepOffset := strings.Index(path[matchEnd:], "/")
+	if pathSepOffset > -1 {
+		return path[0 : matchEnd+pathSepOffset]
 	} else {
-		parts := strings.Split(query, " ")
-		matchedParts := 0
-		for _, part := range parts {
-			if strings.Contains(strings.ToLower(candidate.Path),
-				strings.ToLower(part)) {
-				matchedParts++
-			} else {
-				break
+		return path
+	}
+}
+
+func sortGroupMatches(matches []QueryMatch) []QueryMatch {
+	// if there are multiple matches which share a common prefix
+	// where all of the matches occur in the common prefix then
+	// return only the common prefix
+	prefixMatches := map[string][]int{}
+
+	for index, match := range matches {
+		prefix := matchedPrefix(match.Dir.Path, match.MatchOffsets)
+		if prefixMatches[prefix] == nil {
+			prefixMatches[prefix] = []int{}
+		}
+		prefixMatches[prefix] = append(prefixMatches[prefix], index)
+	}
+
+	result := []QueryMatch{}
+	for prefix, indexes := range prefixMatches {
+		if len(indexes) > 2 {
+			result = append(result, QueryMatch{
+				Dir:          DirUsage{Path: prefix},
+				MatchOffsets: matches[indexes[0]].MatchOffsets,
+			})
+		} else {
+			for _, index := range indexes {
+				result = append(result, matches[index])
 			}
 		}
-		return matchedParts == len(parts)
 	}
+
+	return result
+}
+
+func (server *RecentDirServer) assignResultIds(matches []QueryMatch) {
+	server.pathIds = map[string]int{}
+	for index, match := range matches {
+		matches[index].Id = server.assignId(match.Dir.Path)
+	}
+}
+
+func (server *RecentDirServer) queryMatch(query string, candidate DirUsage) (match QueryMatch, ok bool) {
+	match.Dir = candidate
+	match.MatchOffsets = []MatchOffset{}
+
+	parts := strings.Split(query, " ")
+	matchedParts := 0
+	for _, part := range parts {
+		index := strings.Index(strings.ToLower(candidate.Path),
+			strings.ToLower(part))
+		if index >= 0 {
+			match.MatchOffsets = append(match.MatchOffsets, MatchOffset{
+				Start:  index,
+				Length: len(part),
+			})
+			matchedParts++
+		} else {
+			break
+		}
+	}
+	ok = matchedParts == len(parts)
+
+	return
 }
 
 func (server *RecentDirServer) serve() {
@@ -165,15 +244,28 @@ func (server *RecentDirServer) serve() {
 		case _ = <-saveTicker:
 			server.store.Save(server.recentDirs)
 		case query := <-server.queryChan:
-			result := []DirUsage{}
-			for dir, usage := range server.recentDirs {
-				if server.queryMatch(query.query, usage) {
-					if usage.Id == 0 {
-						usage.Id = server.maxId() + 1
-						server.recentDirs[dir] = usage
+			result := []QueryMatch{}
+
+			queryId, err := strconv.Atoi(query.query)
+			if err == nil {
+				for path, id := range server.pathIds {
+					if id == queryId {
+						result = append(result, QueryMatch{
+							Dir: DirUsage{Path: path},
+						})
+						break
 					}
-					result = append(result, usage)
 				}
+			} else {
+				for _, usage := range server.recentDirs {
+					match, ok := server.queryMatch(query.query, usage)
+					if ok {
+						match.Dir = usage
+						result = append(result, match)
+					}
+				}
+				result = sortGroupMatches(result)
+				server.assignResultIds(result)
 			}
 			query.replyChan <- result
 		}
@@ -217,7 +309,7 @@ func main() {
 		}
 
 		query := strings.Join(flag.Args(), " ")
-		reply := []DirUsage{}
+		reply := []QueryMatch{}
 		err = client.Call("RecentDirServer.Query", query, &reply)
 		if err != nil {
 			fmt.Printf("Failed to connect to RD server: %v\n", err)
@@ -225,10 +317,10 @@ func main() {
 		}
 
 		if len(reply) == 1 {
-			fmt.Println(reply[0].Path)
+			fmt.Println(reply[0].Dir.Path)
 		} else {
-			for _, dir := range reply {
-				fmt.Printf("  %d: %s\n", dir.Id, dir.Path)
+			for _, match := range reply {
+				fmt.Printf("  %d: %s\n", match.Id, match.Dir.Path)
 			}
 		}
 	}
