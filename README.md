@@ -14,15 +14,19 @@ from the shell, via the `cdr` command.
 
 ### Installation
 
-If you have Go installed and your path set up so that $GOPATH/bin is
-included in your path:
+First, install Go 1.0 or later. Binary packages are available from http://golang.org
+On Linux, you can use `sudo apt-get install golang-go`
+
+To build rd and install the helper scripts:
 
 ```
-	go get github.com/robertknight/rd
+	./setup.sh
 ```
 
-See the _Bash Integration_ section below for setting up the `cdr` command for use
-in the shell.
+This will:
+ 1. Build the 'rd' tool
+ 2. Add an entry to ~/.bashrc to load bash integration on login
+ 3. Add an entry to ~/.config/autostart to start the 'rd' daemon on next login
 
 ### Usage
 

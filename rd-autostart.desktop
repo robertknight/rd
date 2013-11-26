@@ -2,7 +2,6 @@
 Name=rd
 GenericName=Recent Directory daemon
 Comment=Monitor recently used directories
-Exec=rd -daemon
 Terminal=false
 Type=Application
 StartupNotify=false
