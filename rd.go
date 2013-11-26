@@ -74,6 +74,18 @@ type QueryMatch struct {
 	MatchOffsets []MatchOffset
 }
 
+// returns the number of matches which occur at the start
+// of a component in the path
+func (match *QueryMatch) ComponentPrefixMatches() int {
+	prefixMatches := 0
+	for _, offset := range match.MatchOffsets {
+		if offset.Start > 0 && match.Dir.Path[offset.Start-1] == '/' {
+			prefixMatches++
+		}
+	}
+	return prefixMatches
+}
+
 type RecentDirServer struct {
 	sources []DirUseSource
 
@@ -174,8 +186,17 @@ func matchedPrefix(path string, matches []MatchOffset) string {
 
 type QueryMatchSort []QueryMatch
 
+// sort query matches such that list.Less(i,j) is true iff
+// list[i] is a better match than list[j]
 func (list QueryMatchSort) Less(i, j int) bool {
-	return list[i].Dir.Path < list[j].Dir.Path
+	prefixMatchesLeft := list[i].ComponentPrefixMatches()
+	prefixMatchesRight := list[j].ComponentPrefixMatches()
+
+	if prefixMatchesLeft != prefixMatchesRight {
+		return prefixMatchesLeft > prefixMatchesRight
+	} else {
+		return list[i].Dir.Path < list[j].Dir.Path
+	}
 }
 
 func (list QueryMatchSort) Len() int {
