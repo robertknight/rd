@@ -170,6 +170,20 @@ func matchedPrefix(path string, matches []MatchOffset) string {
 	}
 }
 
+type QueryMatchSort []QueryMatch
+
+func (list QueryMatchSort) Less(i, j int) bool {
+	return list[i].Dir.Path < list[j].Dir.Path
+}
+
+func (list QueryMatchSort) Len() int {
+	return len(list)
+}
+
+func (list QueryMatchSort) Swap(i, j int) {
+	list[i], list[j] = list[j], list[i]
+}
+
 func sortGroupMatches(matches []QueryMatch) []QueryMatch {
 	// if there are multiple matches which share a common prefix
 	// where all of the matches occur in the common prefix then
@@ -198,7 +212,10 @@ func sortGroupMatches(matches []QueryMatch) []QueryMatch {
 		}
 	}
 
-	return result
+	var sortedResult QueryMatchSort = result
+	sort.Sort(sortedResult)
+
+	return []QueryMatch(sortedResult)
 }
 
 func (server *RecentDirServer) assignResultIds(matches []QueryMatch) {
