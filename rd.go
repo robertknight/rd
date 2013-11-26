@@ -321,6 +321,7 @@ func IsTerminal(fd int) bool {
 
 func main() {
 	daemonFlag := flag.Bool("daemon", false, "Start rd in daemon mode")
+	colorFlag := flag.Bool("color", IsTerminal(syscall.Stdout), "Colorize matches in output")
 	flag.Parse()
 
 	connType := "unix"
@@ -375,7 +376,7 @@ This should be set up to run at login.
 		} else {
 			for _, match := range reply {
 				var highlightedMatch string
-				if IsTerminal(syscall.Stdout) {
+				if *colorFlag {
 					highlightedMatch = highlightMatches(match.Dir.Path, match.MatchOffsets)
 				} else {
 					highlightedMatch = match.Dir.Path
