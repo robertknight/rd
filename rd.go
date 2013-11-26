@@ -7,9 +7,14 @@ import (
 	"net"
 	"net/rpc"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
+	"unsafe"
+
+	"github.com/wsxiaoys/terminal/color"
 )
 
 // DirUseSources provide a stream of events indicating
@@ -272,6 +277,48 @@ func (server *RecentDirServer) serve() {
 	}
 }
 
+type MatchList []MatchOffset
+
+func (m MatchList) Len() int {
+	return len(m)
+}
+
+func (m MatchList) Less(i, j int) bool {
+	return m[i].Start < m[j].Start
+}
+
+func (m MatchList) Swap(i, j int) {
+	m[i], m[j] = m[j], m[i]
+}
+
+func highlightMatches(input string, offsets []MatchOffset) string {
+	var list MatchList = offsets
+	sort.Sort(list)
+
+	output := ""
+	offset := 0
+	startMarker := color.Colorize("r!")
+	endMarker := color.Colorize("|")
+
+	for _, match := range list {
+		output += input[offset:match.Start]
+		output += startMarker
+		output += input[match.Start : match.Start+match.Length]
+		output += endMarker
+		offset = match.Start + match.Length
+	}
+	output += input[offset:]
+
+	return output
+}
+
+func IsTerminal(fd int) bool {
+	// taken from exp/terminal/util.go
+	var termios syscall.Termios
+	_, _, err := syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), uintptr(syscall.TCGETS), uintptr(unsafe.Pointer(&termios)), 0, 0, 0)
+	return err == 0
+}
+
 func main() {
 	daemonFlag := flag.Bool("daemon", false, "Start rd in daemon mode")
 	flag.Parse()
@@ -327,7 +374,13 @@ This should be set up to run at login.
 			fmt.Println(reply[0].Dir.Path)
 		} else {
 			for _, match := range reply {
-				fmt.Printf("  %d: %s\n", match.Id, match.Dir.Path)
+				var highlightedMatch string
+				if IsTerminal(syscall.Stdout) {
+					highlightedMatch = highlightMatches(match.Dir.Path, match.MatchOffsets)
+				} else {
+					highlightedMatch = match.Dir.Path
+				}
+				fmt.Printf("  %d: %s\n", match.Id, highlightedMatch)
 			}
 		}
 	}
