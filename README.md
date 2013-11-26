@@ -14,8 +14,13 @@ from the shell, via the `cdr` command.
 
 ### Installation
 
-First, install Go 1.0 or later. Binary packages are available from http://golang.org
-On Linux, you can use `sudo apt-get install golang-go`
+First, install Go 1.0 or later and set GOPATH. Binary packages are available from http://golang.org
+On Linux, you can use:
+
+```
+	sudo apt-get install golang-go
+	export GOPATH=$HOME/go
+```
 
 To build rd and install the helper scripts:
 
