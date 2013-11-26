@@ -168,6 +168,8 @@ func matchedPrefix(path string, matches []MatchOffset) string {
 	} else {
 		return path
 	}
+
+	return "" // for Go 1.0 compat
 }
 
 type QueryMatchSort []QueryMatch
