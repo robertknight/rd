@@ -16,7 +16,7 @@
 # pattern. If there is a single result, cdr switches
 # to the given dir. If there are multiple matches,
 # prints a list of matches alongside a numeric ID for
-# each.
+# each and prompts for a match number to navigate to.
 #
 # The second form 'cdr <id>' can then be used to switch
 # to a dir listed by a recent 'cdr <pattern>' query.
@@ -32,5 +32,8 @@ function cdr {
 		cd "$matches"
 	else
 		echo "$matches"
+		echo -en "\nSelect match: "
+		read matchIndex
+		cdr $matchIndex
 	fi
 }
