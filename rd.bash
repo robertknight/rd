@@ -22,7 +22,7 @@
 # to a dir listed by a recent 'cdr <pattern>' query.
 #
 function cdr {
-	matches=`rd -color $@`
+	matches=`rd -color query $@`
 
 	# Check whether the response was a single match
 	# or a list of possible matches

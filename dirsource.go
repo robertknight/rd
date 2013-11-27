@@ -51,3 +51,21 @@ func newCurrentDirPoller() currentDirPoller {
 	go poller.Run()
 	return poller
 }
+
+type manualDirSource struct {
+	events chan DirUseEvent
+}
+
+func newManualDirSource() manualDirSource {
+	return manualDirSource{
+		events: make(chan DirUseEvent),
+	}
+}
+
+func (source *manualDirSource) Push(dir string) {
+	source.events <- DirUseEvent{Dir: dir}
+}
+
+func (source *manualDirSource) Events() chan DirUseEvent {
+	return source.events
+}

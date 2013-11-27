@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -79,14 +80,20 @@ type RecentDirServer struct {
 	// timestamp for the most recent update
 	// to 'recentDirs'
 	lastSaveTime time.Time
+
+	// an event source for manual reporting of
+	// dir usage via the Push() func
+	manualDirSource manualDirSource
 }
 
 func NewRecentDirServer() RecentDirServer {
 	server := RecentDirServer{}
 
 	procCwdPoller := newCurrentDirPoller()
+	server.manualDirSource = newManualDirSource()
 	server.sources = []DirUseSource{
 		&procCwdPoller,
+		&server.manualDirSource,
 	}
 	server.eventChan = make(chan DirUseEvent)
 	server.queryChan = make(chan Query)
@@ -112,6 +119,21 @@ func (server *RecentDirServer) findPathById(findId int) string {
 		}
 	}
 	return ""
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
+func (server *RecentDirServer) Push(dir string, reply *bool) error {
+	if !fileExists(dir) {
+		return errors.New("Dir %s does not exist")
+	}
+
+	server.manualDirSource.Push(dir)
+	*reply = true
+	return nil
 }
 
 func (server *RecentDirServer) Query(queryStr string, reply *[]QueryMatch) error {
@@ -332,9 +354,58 @@ func highlightMatches(input string, offsets []MatchOffset) string {
 	return output
 }
 
+func handleQueryCommand(client *rpc.Client, args []string, useColors bool) {
+	query := strings.Join(args, " ")
+	reply := []QueryMatch{}
+	err := client.Call("RecentDirServer.Query", query, &reply)
+	if err != nil {
+		fmt.Printf("Failed to query the rd daemon: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(reply) == 1 {
+		fmt.Println(reply[0].Dir.Path)
+	} else {
+		for _, match := range reply {
+			var highlightedMatch string
+			if useColors {
+				highlightedMatch = highlightMatches(match.Dir.Path, match.MatchOffsets)
+			} else {
+				highlightedMatch = match.Dir.Path
+			}
+			fmt.Printf("  %d: %s\n", match.Id, highlightedMatch)
+		}
+	}
+}
+
+func handlePushCommand(client *rpc.Client, args []string) {
+	if len(args) < 1 {
+		fmt.Printf("No dir to push specified\n")
+		os.Exit(1)
+	}
+
+	var reply bool
+	err := client.Call("RecentDirServer.Push", args[0], &reply)
+	if err != nil {
+		fmt.Printf("Failed to query the rd daemon: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func main() {
 	daemonFlag := flag.Bool("daemon", false, "Start rd in daemon mode")
 	colorFlag := flag.Bool("color", term.IsTerminal(syscall.Stdout), "Colorize matches in output")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: %s [options] <command> <args...>
+
+Supported commands:
+  query <pattern>|<id>
+  push <path>
+
+Flags:
+`, os.Args[0])
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	connType := "unix"
@@ -359,7 +430,8 @@ func main() {
 	} else {
 		// client operation
 		if flag.NArg() < 1 {
-			fmt.Println("No query given")
+			fmt.Printf("No command given. Use '%s -help' for a list of supported commands\n",
+				os.Args[0])
 			os.Exit(1)
 		}
 
@@ -376,26 +448,20 @@ This should be set up to run at login.
 			os.Exit(1)
 		}
 
-		query := strings.Join(flag.Args(), " ")
-		reply := []QueryMatch{}
-		err = client.Call("RecentDirServer.Query", query, &reply)
-		if err != nil {
-			fmt.Printf("Failed to query the rd daemon: %v\n", err)
-			os.Exit(1)
+		modeStr := flag.Arg(0)
+		args := []string{}
+		if flag.NArg() > 1 {
+			args = flag.Args()[1:]
 		}
 
-		if len(reply) == 1 {
-			fmt.Println(reply[0].Dir.Path)
-		} else {
-			for _, match := range reply {
-				var highlightedMatch string
-				if *colorFlag {
-					highlightedMatch = highlightMatches(match.Dir.Path, match.MatchOffsets)
-				} else {
-					highlightedMatch = match.Dir.Path
-				}
-				fmt.Printf("  %d: %s\n", match.Id, highlightedMatch)
-			}
+		switch modeStr {
+		case "query":
+			handleQueryCommand(client, args, *colorFlag)
+		case "push":
+			handlePushCommand(client, args)
+		default:
+			fmt.Printf("Unknown command '%s', use '%s -help' for a list of supported commands\n",
+				modeStr, os.Args[0])
 		}
 	}
 }

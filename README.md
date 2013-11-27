@@ -37,8 +37,8 @@ This will:
 
 ```
   rd -daemon
-     <pattern>
-     <id>
+     query <pattern>|<id>
+     push <path>
 ```
 
 Running rd with -daemon starts the daemon which monitors process activity
@@ -50,6 +50,9 @@ is printed. If there are multiple matches, an ID is printed for each match
 followed by the path.
 
 Specifying an <id> prints the path output by a previous <pattern> query.
+
+The 'push' command can be used to explicitly add a dir to rd's history rather than
+waiting for it to discover the dir when it becomes a process's current dir.
 
 ### Bash Integration
 
