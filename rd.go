@@ -189,7 +189,7 @@ func (list QueryMatchSort) Less(i, j int) bool {
 	if prefixMatchesLeft != prefixMatchesRight {
 		return prefixMatchesLeft > prefixMatchesRight
 	} else {
-		return list[i].Dir.Path < list[j].Dir.Path
+		return list[i].Dir.AccessTime.After(list[j].Dir.AccessTime)
 	}
 }
 
@@ -218,8 +218,16 @@ func sortGroupMatches(matches []QueryMatch) []QueryMatch {
 	result := []QueryMatch{}
 	for prefix, indexes := range prefixMatches {
 		if len(indexes) > 2 {
+			var maxTime time.Time
+			for _, index := range indexes {
+				aTime := matches[index].Dir.AccessTime
+				if aTime.After(maxTime) {
+					maxTime = aTime
+				}
+			}
+
 			result = append(result, QueryMatch{
-				Dir:          DirUsage{Path: prefix},
+				Dir:          DirUsage{Path: prefix, AccessTime: maxTime},
 				MatchOffsets: matches[indexes[0]].MatchOffsets,
 			})
 		} else {
