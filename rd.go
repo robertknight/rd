@@ -307,8 +307,12 @@ func (server *RecentDirServer) serve() {
 				for _, usage := range server.recentDirs {
 					match, ok := server.queryMatch(query.query, usage)
 					if ok {
-						match.Dir = usage
-						result = append(result, match)
+						if fileExists(match.Dir.Path) {
+							match.Dir = usage
+							result = append(result, match)
+						} else {
+							delete(server.recentDirs, match.Dir.Path)
+						}
 					}
 				}
 				result = sortGroupMatches(result)
