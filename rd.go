@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/wsxiaoys/terminal/color"
 	"github.com/kless/term"
+	"github.com/wsxiaoys/terminal/color"
 )
 
 // DirUseSources provide a stream of events indicating
@@ -37,11 +37,20 @@ func (poller *currentDirPoller) Events() chan DirUseEvent {
 }
 
 func (poller *currentDirPoller) Run() {
+	// this currently polls all processes every few
+	// seconds. It would be preferable to avoid the polling if possible
+
+	// map of (PID -> previous current dir)
+	prevDir := map[int]string{}
+
 	tick := time.Tick(5 * time.Second)
 	for _ = range tick {
 		procs := scanProcs()
 		for _, procInfo := range procs {
-			poller.events <- DirUseEvent{procInfo.Id, procInfo.CurrentDir}
+			if prevDir[procInfo.Id] != procInfo.CurrentDir {
+				prevDir[procInfo.Id] = procInfo.CurrentDir
+				poller.events <- DirUseEvent{procInfo.Id, procInfo.CurrentDir}
+			}
 		}
 	}
 }
@@ -107,6 +116,14 @@ type RecentDirServer struct {
 	pathIds map[string]int
 
 	store recentDirStore
+
+	// timestamp for the last save
+	// of dir history to the persistent store
+	lastUpdateTime time.Time
+
+	// timestamp for the most recent update
+	// to 'recentDirs'
+	lastSaveTime time.Time
 }
 
 func NewRecentDirServer() RecentDirServer {
@@ -272,6 +289,11 @@ func (server *RecentDirServer) queryMatch(query string, candidate DirUsage) (mat
 	return
 }
 
+func (server *RecentDirServer) recordDirUsage(usage DirUsage) {
+	server.recentDirs[usage.Path] = usage
+	server.lastUpdateTime = time.Now()
+}
+
 func (server *RecentDirServer) serve() {
 	saveTicker := time.Tick(5 * time.Second)
 	for {
@@ -285,9 +307,12 @@ func (server *RecentDirServer) serve() {
 				log.Printf("recording new dir %s (total: %d)", newEvent.Dir, len(server.recentDirs)+1)
 			}
 			dirUsage.AccessTime = time.Now()
-			server.recentDirs[newEvent.Dir] = dirUsage
+			server.recordDirUsage(dirUsage)
 		case _ = <-saveTicker:
-			server.store.Save(server.recentDirs)
+			if server.lastUpdateTime.After(server.lastSaveTime) {
+				server.store.Save(server.recentDirs)
+				server.lastSaveTime = time.Now()
+			}
 		case query := <-server.queryChan:
 			result := []QueryMatch{}
 
