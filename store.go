@@ -15,7 +15,8 @@ func NewRecentDirStore(path string) recentDirStore {
 }
 
 func (store *recentDirStore) Save(history map[string]DirUsage) {
-	file, err := os.Create(store.path)
+	tmpPath := store.path + ".tmp"
+	file, err := os.Create(tmpPath)
 	if err != nil {
 		log.Printf("Failed to open file to store map: %v", err)
 		return
@@ -25,11 +26,19 @@ func (store *recentDirStore) Save(history map[string]DirUsage) {
 	if err != nil {
 		log.Printf("Failed to store map: %v", err)
 	}
+
+	file.Close()
+	err = os.Rename(tmpPath, store.path)
+	if err != nil {
+		log.Printf("Failed to rename %s to %s: %v", tmpPath, store.path, err)
+	}
 }
 
 func (store *recentDirStore) Load() map[string]DirUsage {
 	result := map[string]DirUsage{}
 	file, err := os.Open(store.path)
+	defer file.Close()
+
 	if err != nil {
 		log.Printf("Unable to load map: %v", err)
 		return result
