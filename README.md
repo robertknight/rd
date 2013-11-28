@@ -39,6 +39,7 @@ This will:
   rd -daemon
      query <pattern>|<id>
      push <path>
+     list
 ```
 
 Running rd with -daemon starts the daemon which monitors process activity

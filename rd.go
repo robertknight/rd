@@ -18,6 +18,8 @@ import (
 	"github.com/wsxiaoys/terminal/color"
 )
 
+const QueryAll = "*"
+
 type Query struct {
 	query     string
 	replyChan chan []QueryMatch
@@ -146,6 +148,20 @@ func (server *RecentDirServer) Query(queryStr string, reply *[]QueryMatch) error
 	return nil
 }
 
+func (server *RecentDirServer) List(unused bool, reply *[]string) error {
+	query := Query{
+		query:     QueryAll,
+		replyChan: make(chan []QueryMatch),
+	}
+	server.queryChan <- query
+	allEntries := <-query.replyChan
+	for _, match := range allEntries {
+		*reply = append(*reply, match.Dir.Path)
+	}
+	sort.Strings(*reply)
+	return nil
+}
+
 func (server *RecentDirServer) assignId(path string) int {
 	for existingPath, id := range server.pathIds {
 		if existingPath == path {
@@ -251,8 +267,15 @@ func (server *RecentDirServer) assignResultIds(matches []QueryMatch) {
 }
 
 func (server *RecentDirServer) queryMatch(query string, candidate DirUsage) (match QueryMatch, ok bool) {
+
 	match.Dir = candidate
 	match.MatchOffsets = []MatchOffset{}
+
+	// for the List() command, handle the '*' query
+	// to list all known entries
+	if query == QueryAll {
+		return match, true
+	}
 
 	parts := strings.Fields(query)
 	matchedParts := 0
@@ -329,8 +352,10 @@ func (server *RecentDirServer) serve() {
 						}
 					}
 				}
-				result = sortGroupMatches(result)
-				server.assignResultIds(result)
+				if query.query != QueryAll {
+					result = sortGroupMatches(result)
+					server.assignResultIds(result)
+				}
 			}
 			query.replyChan <- result
 		}
@@ -410,6 +435,18 @@ func handlePushCommand(client *rpc.Client, args []string) {
 	}
 }
 
+func handleListCommand(client *rpc.Client) {
+	var reply []string
+	err := client.Call("RecentDirServer.List", false /* unused */, &reply)
+	if err != nil {
+		fmt.Printf("Failed to query the rd daemon: %v\n", err)
+		os.Exit(1)
+	}
+	for _, dir := range reply {
+		fmt.Printf("%s\n", dir)
+	}
+}
+
 func main() {
 	daemonFlag := flag.Bool("daemon", false, "Start rd in daemon mode")
 	colorFlag := flag.Bool("color", term.IsTerminal(syscall.Stdout), "Colorize matches in output")
@@ -419,6 +456,7 @@ func main() {
 Supported commands:
   query <pattern>|<id>
   push <path>
+  list
 
 Flags:
 `, os.Args[0])
@@ -477,6 +515,8 @@ This should be set up to run at login.
 			handleQueryCommand(client, args, *colorFlag)
 		case "push":
 			handlePushCommand(client, args)
+		case "list":
+			handleListCommand(client)
 		default:
 			fmt.Printf("Unknown command '%s', use '%s -help' for a list of supported commands\n",
 				modeStr, os.Args[0])
