@@ -1,7 +1,6 @@
 package main
 
-// functions for querying information of running processes.
-// Currently only implemented for Linux
+// +build linux
 
 import (
 	"fmt"
