@@ -104,8 +104,9 @@ func NewRecentDirServer() RecentDirServer {
 	server.pathIds = make(map[string]int)
 
 	for _, source := range server.sources {
+		events := source.Events()
 		go func() {
-			for event := range source.Events() {
+			for event := range events {
 				server.eventChan <- event
 			}
 		}()
