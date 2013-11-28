@@ -254,19 +254,25 @@ func (server *RecentDirServer) queryMatch(query string, candidate DirUsage) (mat
 	match.Dir = candidate
 	match.MatchOffsets = []MatchOffset{}
 
-	parts := strings.Split(query, " ")
+	parts := strings.Fields(query)
 	matchedParts := 0
 	for _, part := range parts {
-		index := strings.Index(strings.ToLower(candidate.Path),
-			strings.ToLower(part))
-		if index >= 0 {
+		candidateNorm := strings.ToLower(candidate.Path)
+		partNorm := strings.ToLower(part)
+		offset := 0
+		for {
+			subStr := candidateNorm[offset:]
+			index := strings.Index(subStr, partNorm)
+			if index < 0 {
+				break
+			}
+
 			match.MatchOffsets = append(match.MatchOffsets, MatchOffset{
-				Start:  index,
+				Start:  index + offset,
 				Length: len(part),
 			})
 			matchedParts++
-		} else {
-			break
+			offset += index + len(part)
 		}
 	}
 	ok = matchedParts == len(parts)
