@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-if [ `uname` == 'Darwin' ]
+if [ `uname` = 'Darwin' ]
 then
 	OSX=1
 fi
@@ -51,17 +51,12 @@ else
 	SHELL_INIT_FILE=~/.bashrc
 fi
 
-sed -i .bak "/rd.bash/d" $SHELL_INIT_FILE
-echo "source \"$CDR_SCRIPT\"" >> $SHELL_INIT_FILE
+SHELL_SOURCE_CMD="source \"$CDR_SCRIPT\""
+sed -i.bak "/rd.bash/d" $SHELL_INIT_FILE
+echo $SHELL_SOURCE_CMD >> $SHELL_INIT_FILE
 
-# Start the rd daemon
-if [ $OSX ]
-then
-	killall rd 2>/dev/null
-else
-	killall -q rd
-fi
+# Restart the rd daemon
+$RD_BIN_PATH stop
+$RD_BIN_PATH query
 
-nohup rd -daemon 2>/dev/null &
-
-echo "Setup complete. Start a new shell to use the 'cdr' command"
+echo "Setup complete. The 'cdr' command will be available in new shells"
