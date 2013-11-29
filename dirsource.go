@@ -1,6 +1,10 @@
 package main
 
-import "time"
+import (
+	"time"
+
+	"github.com/robertknight/rd/procinfo"
+)
 
 // DirUseSource implementations provide a stream of events indicating
 // that a particular process has used a given dir
@@ -35,8 +39,12 @@ func (poller *currentDirPoller) Run() {
 
 	tick := time.Tick(5 * time.Second)
 	for _ = range tick {
-		procs := scanProcs()
-		for _, procInfo := range procs {
+		pids := procinfo.ListPids()
+		for _, pid := range pids {
+			procInfo, err := procinfo.GetProcInfo(pid)
+			if err != nil {
+				continue
+			}
 			if prevDir[procInfo.Id] != procInfo.CurrentDir {
 				prevDir[procInfo.Id] = procInfo.CurrentDir
 				poller.events <- DirUseEvent{procInfo.Id, procInfo.CurrentDir}

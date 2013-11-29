@@ -1,4 +1,4 @@
-package main
+package procinfo
 
 // +build linux
 
@@ -7,12 +7,6 @@ import (
 	"os"
 	"strconv"
 )
-
-type Proc struct {
-	Id         int
-	Name       string
-	CurrentDir string
-}
 
 func GetProcInfo(id int) (Proc, error) {
 	binLinkPath := fmt.Sprintf("/proc/%d/exe", id)
@@ -27,23 +21,19 @@ func GetProcInfo(id int) (Proc, error) {
 		return Proc{}, err
 	}
 
-	return Proc{Id: id, Name: binPath, CurrentDir: cwdPath}, nil
+	return Proc{Id: id, ExePath: binPath, CurrentDir: cwdPath}, nil
 }
 
-func scanProcs() []Proc {
+func ListPids() []int {
 	procDir, _ := os.Open("/proc")
 	files, _ := procDir.Readdir(0)
-	procs := []Proc{}
+	pids := []int{}
 	for _, fileInfo := range files {
 		pid, err := strconv.Atoi(fileInfo.Name())
 		if err != nil {
 			continue
 		}
-		proc, err := GetProcInfo(pid)
-		if err != nil {
-			continue
-		}
-		procs = append(procs, proc)
+		pids = append(pids, pid)
 	}
-	return procs
+	return pids
 }

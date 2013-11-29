@@ -1,4 +1,4 @@
-package main
+package procinfo
 
 // +build darwin
 
@@ -7,15 +7,8 @@ package main
 import "C"
 
 import (
-	"errors"
 	"unsafe"
 )
-
-type Proc struct {
-	Id         int
-	Name       string
-	CurrentDir string
-}
 
 const PROC_PIDVNODEPATHINFO = 9
 
@@ -24,7 +17,7 @@ type PathInfo struct {
 	rdir C.struct_vnode_info_path
 }
 
-func listPids() []int {
+func ListPids() []int {
 	var buffer [4096]C.int
 	pidCount := int(C.proc_listallpids(unsafe.Pointer(&buffer[0]), C.int(len(buffer))))
 	result := make([]int, pidCount)
@@ -37,9 +30,9 @@ func listPids() []int {
 func getProcCurrentDir(pid int) (string, int) {
 	var pathInfo PathInfo
 	pathInfoPtr := unsafe.Pointer(&pathInfo)
-	err := int(C.proc_pidinfo(C.int(pid), PROC_PIDVNODEPATHINFO, 0, pathInfoPtr,
+	result := int(C.proc_pidinfo(C.int(pid), PROC_PIDVNODEPATHINFO, 0, pathInfoPtr,
 		C.int(unsafe.Sizeof(pathInfo))))
-	return C.GoString(&pathInfo.cdir.vip_path[0]), err
+	return C.GoString(&pathInfo.cdir.vip_path[0]), result
 }
 
 func GetProcInfo(id int) (Proc, error) {
@@ -47,19 +40,7 @@ func GetProcInfo(id int) (Proc, error) {
 	if result != 0 {
 		return Proc{Id: id, CurrentDir: cwd}, nil
 	} else {
-		return Proc{Id: id}, errors.New("unable to read pid info")
+		return Proc{Id: id}, ErrAccess
 	}
 }
 
-func scanProcs() []Proc {
-	pids := listPids()
-	procs := []Proc{}
-	for _, pid := range pids {
-		proc, err := GetProcInfo(pid)
-		if err != nil {
-			continue
-		}
-		procs = append(procs, proc)
-	}
-	return procs
-}
