@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/rpc"
 	"os"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -160,6 +161,11 @@ func (server *RecentDirServer) List(unused bool, reply *[]string) error {
 		*reply = append(*reply, match.Dir.Path)
 	}
 	sort.Strings(*reply)
+	return nil
+}
+
+func (server *RecentDirServer) Stop(unused bool, reply *string) error {
+	os.Exit(0)
 	return nil
 }
 
@@ -465,8 +471,35 @@ Flags:
 	}
 	flag.Parse()
 
+	// try to connect to the 'rd' daemon
 	connType := "unix"
 	connAddr := os.ExpandEnv("$HOME/.rd.sock")
+	client, err := rpc.Dial(connType, connAddr)
+
+	if err == nil && *daemonFlag {
+		fmt.Fprintf(os.Stderr, "Daemon is already running\n")
+		os.Exit(1)
+	} else if err != nil && !*daemonFlag {
+		// daemon is not running, try to start it automatically
+		daemonCmd := exec.Command(os.Args[0], "-daemon")
+		err = daemonCmd.Start()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to start the 'rd' daemon: %v\n", err)
+			os.Exit(1)
+		}
+
+		maxWait := time.Now().Add(1 * time.Second)
+		daemonRunning := false
+		for time.Now().Before(maxWait) && !daemonRunning {
+			time.Sleep(10 * time.Millisecond)
+			client, err = rpc.Dial(connType, connAddr)
+			daemonRunning = err == nil
+		}
+		if !daemonRunning {
+			fmt.Fprintf(os.Stderr, "Unable to connect to the 'rd' daemon")
+			os.Exit(1)
+		}
+	}
 
 	if *daemonFlag {
 		err := os.Remove(connAddr)
@@ -492,7 +525,6 @@ Flags:
 			os.Exit(1)
 		}
 
-		client, err := rpc.Dial(connType, connAddr)
 		if err != nil {
 			fmt.Printf(
 				`
@@ -518,6 +550,8 @@ This should be set up to run at login.
 			handlePushCommand(client, args)
 		case "list":
 			handleListCommand(client)
+		case "stop":
+			client.Call("RecentDirServer.Stop", false /* unused */, nil)
 		default:
 			fmt.Printf("Unknown command '%s', use '%s -help' for a list of supported commands\n",
 				modeStr, os.Args[0])
