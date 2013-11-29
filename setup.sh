@@ -26,42 +26,48 @@ fi
 echo "Setting up daemon autostart and shell integration"
 
 RD_BIN_PATH=$PWD/rd
+SCRIPT_DIR=integration/
 
 # Autostart the rd daemon at login
 if [ $OSX ]
 then
 	LAUNCHD_AGENT_FILENAME=com.github.robertknight.rd.plist
-	sed "s:\$RD_BIN_PATH:$RD_BIN_PATH:" $LAUNCHD_AGENT_FILENAME > ~/Library/LaunchAgents/$LAUNCHD_AGENT_FILENAME
+	sed "s:\$RD_BIN_PATH:$RD_BIN_PATH:" $SCRIPT_DIR/$LAUNCHD_AGENT_FILENAME > ~/Library/LaunchAgents/$LAUNCHD_AGENT_FILENAME
 else
 	AUTOSTART_DIR=~/.config/autostart
 	if [ -d $AUTOSTART_DIR ]
 	then
-		cp -f $PWD/rd-autostart.desktop $AUTOSTART_DIR/
+		cp -f $SCRIPT_DIR/rd-autostart.desktop $AUTOSTART_DIR/
 		echo "Exec=${RD_BIN_PATH} -daemon" >> $AUTOSTART_DIR/rd-autostart.desktop
 	fi
 fi
 
 # Setup Bash shell integration
-CDR_SCRIPT=$PWD/rd.bash
+CDR_SCRIPT=$SCRIPT_DIR/rd.bash
 
 if [ $OSX ]
 then
-	SHELL_INIT_FILE=~/.bash_profile
+	BASH_INIT_FILE=~/.bash_profile
 else
-	SHELL_INIT_FILE=~/.bashrc
+	BASH_INIT_FILE=~/.bashrc
 fi
 
-SHELL_SOURCE_CMD="source \"$CDR_SCRIPT\""
-sed -i.bak "/rd.bash/d" $SHELL_INIT_FILE
-echo $SHELL_SOURCE_CMD >> $SHELL_INIT_FILE
+BASH_SOURCE_CMD="source \"$CDR_SCRIPT\""
+if [ -e $BASH_INIT_FILE ] ; then
+	sed -i.bak "/rd.bash/d" $BASH_INIT_FILE
+fi
+echo $BASH_SOURCE_CMD >> $BASH_INIT_FILE
 
 # Setup Fish Shell integration
 FISH_CONFIG_DIR=~/.config/fish
 if [ -d $FISH_CONFIG_DIR ]
 then
 	FISH_INIT_FILE=$FISH_CONFIG_DIR/config.fish
-	sed -i.bak "/rd.fish/d" $FISH_INIT_FILE
-	echo ". $PWD/rd.fish" >> $FISH_INIT_FILE
+	if [ -e $FISH_INIT_FILE ]
+	then
+		sed -i.bak "/rd.fish/d" $FISH_INIT_FILE
+	fi
+	echo ". $SCRIPT_DIR/rd.fish" >> $FISH_INIT_FILE
 fi
 
 # Restart the rd daemon
