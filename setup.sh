@@ -41,7 +41,7 @@ else
 	fi
 fi
 
-# Setup Bash integration
+# Setup Bash shell integration
 CDR_SCRIPT=$PWD/rd.bash
 
 if [ $OSX ]
@@ -54,6 +54,15 @@ fi
 SHELL_SOURCE_CMD="source \"$CDR_SCRIPT\""
 sed -i.bak "/rd.bash/d" $SHELL_INIT_FILE
 echo $SHELL_SOURCE_CMD >> $SHELL_INIT_FILE
+
+# Setup Fish Shell integration
+FISH_CONFIG_DIR=~/.config/fish
+if [ -d $FISH_CONFIG_DIR ]
+then
+	FISH_INIT_FILE=$FISH_CONFIG_DIR/config.fish
+	sed -i.bak "/rd.fish/d" $FISH_INIT_FILE
+	echo ". $PWD/rd.fish" >> $FISH_INIT_FILE
+fi
 
 # Restart the rd daemon
 $RD_BIN_PATH stop
