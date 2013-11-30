@@ -1,5 +1,8 @@
 #!/usr/bin/env sh
 
+RD_BIN_PATH=$PWD/rd
+SCRIPT_DIR=$PWD/integration/
+
 if [ `uname` = 'Darwin' ]
 then
 	OSX=1
@@ -10,12 +13,11 @@ echo "Building 'rd'..."
 # Build the 'rd' tool
 if [ -z $GOPATH ]
 then
-	echo "The GOPATH environment variable needs to be set before building"
-	exit 1
+	export GOPATH=/tmp/gocode
 fi
 
 go get
-go build
+go build -o $RD_BIN_PATH
 
 if [ $? -ne 0 ]
 then
@@ -24,9 +26,6 @@ then
 fi
 
 echo "Setting up daemon autostart and shell integration"
-
-RD_BIN_PATH=$PWD/rd
-SCRIPT_DIR=integration/
 
 # Autostart the rd daemon at login
 if [ $OSX ]
