@@ -14,7 +14,7 @@ The database can also be queried or edited directly using the 'rd' command.
 
 ### Installation
 
-First, install Go 1.0 or later. Binary packages are available from http://golang.org
+First, install Go. Binary packages are available from http://golang.org
 On Linux, you can also use:
 
 ```
@@ -31,10 +31,10 @@ Then download and build rd and setup shell integration using:
 
 This will:
  1. Build the 'rd' tool
- 2. Add an entry to your shell's init file (~/.bashrc for Bash, ~/.config/fish/fish.config for fish)
+ 2. Add an entry to your shell's init file (`~/.bashrc` for Bash, `~/.config/fish/fish.config` for fish)
  3. Setup autostart of the daemon on login
-  * On Linux this adds an entry to ~/.config/autostart
-  * On Mac this adds an entry to ~/Library/LaunchAgents
+  * On Linux this adds an entry to `~/.config/autostart`
+  * On Mac this adds an entry to `~/Library/LaunchAgents`
 
 You'll need to open a new shell to make the 'cdr' command available.
 
@@ -47,7 +47,7 @@ You can then use the 'cdr' command to jump to a recently used dir.
   cdr <pattern>
 ```
 
-Will jump to the recently used dir containing '<pattern>', if there are multiple matches
+Will jump to the recently used dir containing _pattern_, if there are multiple matches
 a numbered list will be printed and you'll be prompted to choose a match.
 
 ### The 'rd' command
@@ -67,7 +67,7 @@ dirs which match the pattern. If there is a single match the directory path
 is printed. If there are multiple matches, an ID is printed for each match
 followed by the path.
 
-Specifying an <id> prints the path output by the previous <pattern> query.
+Specifying an _id_ prints the path output by the previous <pattern> query.
 
 The 'push' command can be used to explicitly add a dir to rd's history rather than
 waiting for it to discover the dir when it becomes a process's current dir.
