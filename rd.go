@@ -290,6 +290,7 @@ func (server *RecentDirServer) queryMatch(query string, candidate DirUsage) (mat
 		candidateNorm := strings.ToLower(candidate.Path)
 		partNorm := strings.ToLower(part)
 		offset := 0
+		foundMatch := false
 		for {
 			subStr := candidateNorm[offset:]
 			index := strings.Index(subStr, partNorm)
@@ -301,8 +302,11 @@ func (server *RecentDirServer) queryMatch(query string, candidate DirUsage) (mat
 				Start:  index + offset,
 				Length: len(part),
 			})
-			matchedParts++
 			offset += index + len(part)
+			foundMatch = true
+		}
+		if foundMatch {
+			matchedParts++
 		}
 	}
 	ok = matchedParts == len(parts)
