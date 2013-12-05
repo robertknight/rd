@@ -21,6 +21,13 @@ On Linux, you can also use:
 	sudo apt-get install golang-go
 ```
 
+Mac users who have Homebrew installed can use:
+
+```
+	brew update
+	brew install go
+```
+
 Then download and build rd and setup shell integration using:
 
 ```
