@@ -61,12 +61,9 @@ echo $BASH_SOURCE_CMD >> $BASH_INIT_FILE
 FISH_CONFIG_DIR=~/.config/fish
 if [ -d $FISH_CONFIG_DIR ]
 then
-	FISH_INIT_FILE=$FISH_CONFIG_DIR/config.fish
-	if [ -e $FISH_INIT_FILE ]
-	then
-		sed -i.bak "/rd.fish/d" $FISH_INIT_FILE
-	fi
-	echo ". $SCRIPT_DIR/rd.fish" >> $FISH_INIT_FILE
+	FISH_FUNCTIONS_DIR=$FISH_CONFIG_DIR/functions
+	mkdir -p $FISH_FUNCTIONS_DIR
+	cp $SCRIPT_DIR/cdr.fish $FISH_FUNCTIONS_DIR
 fi
 
 # Restart the rd daemon
