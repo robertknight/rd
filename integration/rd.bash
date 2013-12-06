@@ -22,7 +22,11 @@
 # to a dir listed by a recent 'cdr <pattern>' query.
 #
 function cdr {
-	matches=`rd -color query $@`
+	matches=`$RD_BIN_PATH -color query $@`
+	if [ -z "$matches" ]
+	then
+		return	
+	fi
 
 	# Check whether the response was a single match
 	# or a list of possible matches

@@ -408,7 +408,7 @@ func highlightMatches(input string, offsets []MatchOffset) string {
 	return output
 }
 
-func handleQueryCommand(client *rpc.Client, args []string, useColors bool) {
+func handleQueryCommand(client *rpc.Client, args []string, useColors bool, quiet bool) {
 	query := strings.Join(args, " ")
 	reply := []QueryMatch{}
 	err := client.Call("RecentDirServer.Query", query, &reply)
@@ -419,7 +419,7 @@ func handleQueryCommand(client *rpc.Client, args []string, useColors bool) {
 
 	if len(reply) == 1 {
 		fmt.Println(reply[0].Dir.Path)
-	} else {
+	} else if len(reply) > 0 {
 		for _, match := range reply {
 			var highlightedMatch string
 			if useColors {
@@ -429,6 +429,8 @@ func handleQueryCommand(client *rpc.Client, args []string, useColors bool) {
 			}
 			fmt.Printf("  %d: %s\n", match.Id, highlightedMatch)
 		}
+	} else if !quiet {
+		color.Fprintf(os.Stderr, "No matches for @{r!}%s@{|}.\n", query)
 	}
 }
 
@@ -461,6 +463,7 @@ func handleListCommand(client *rpc.Client) {
 func main() {
 	daemonFlag := flag.Bool("daemon", false, "Start rd in daemon mode")
 	colorFlag := flag.Bool("color", term.IsTerminal(syscall.Stdout), "Colorize matches in output")
+	quietFlag := flag.Bool("quiet", false, "Do not print anything if there are no matches")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: %s [options] <command> <args...>
 
@@ -548,9 +551,9 @@ This should be set up to run at login.
 		}
 
 		switch modeStr {
-		case "query":
-			handleQueryCommand(client, args, *colorFlag)
-		case "push":
+		case "query", "q":
+			handleQueryCommand(client, args, *colorFlag, *quietFlag)
+		case "push", "p":
 			handlePushCommand(client, args)
 		case "list":
 			handleListCommand(client)
