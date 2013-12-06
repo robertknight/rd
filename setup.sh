@@ -51,7 +51,7 @@ else
 	BASH_INIT_FILE=~/.bashrc
 fi
 
-BASH_SOURCE_CMD="source \"$CDR_SCRIPT\""
+BASH_SOURCE_CMD="export RD_BIN_PATH=$RD_BIN_PATH ; source \"$CDR_SCRIPT\""
 if [ -e $BASH_INIT_FILE ] ; then
 	sed -i.bak "/rd.bash/d" $BASH_INIT_FILE
 fi
@@ -64,6 +64,7 @@ then
 	FISH_FUNCTIONS_DIR=$FISH_CONFIG_DIR/functions
 	mkdir -p $FISH_FUNCTIONS_DIR
 	cp $SCRIPT_DIR/cdr.fish $FISH_FUNCTIONS_DIR
+	sed -i.bak "s:\$RD_BIN_PATH:$RD_BIN_PATH:g" $FISH_FUNCTIONS_DIR/cdr.fish
 fi
 
 # Restart the rd daemon

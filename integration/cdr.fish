@@ -6,9 +6,8 @@
 # See rd.bash for documentation
 #
 function cdr
-	set matches (rd -color query $argv)
+	set matches (eval "$RD_BIN_PATH" -color query $argv)
 	if test (count $matches) -eq 0
-		echo "No directories match the pattern '$argv'"
 		return
 	end
 
