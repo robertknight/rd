@@ -397,7 +397,9 @@ func highlightMatches(input string, offsets []MatchOffset) string {
 	endMarker := color.Colorize("|")
 
 	for _, match := range list {
-		output += input[offset:match.Start]
+		if offset < match.Start {
+			output += input[offset:match.Start]
+		}
 		output += startMarker
 		output += input[match.Start : match.Start+match.Length]
 		output += endMarker
