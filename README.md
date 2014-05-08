@@ -51,11 +51,13 @@ Once rd is installed, it will monitor the current directories of processes on yo
 You can then use the 'cdr' command to jump to a recently used dir.
 
 ```
-  cdr <pattern>
+  cdr <pattern> (<pattern>...)
 ```
 
 Will jump to the recently used dir containing _pattern_, if there are multiple matches
 a numbered list will be printed and you'll be prompted to choose a match.
+
+If multiple patterns are given, they are AND-ed together so cdr will jump to the recently used dir which matches all of the patterns.
 
 ### The 'rd' command
 
