@@ -429,7 +429,13 @@ func handleQueryCommand(client *rpc.Client, args []string, useColors bool, quiet
 	if len(reply) == 1 {
 		fmt.Println(reply[0].Dir.Path)
 	} else if len(reply) > 0 {
-		for _, match := range reply {
+		maxMatches := 5
+		if len(reply) < maxMatches {
+			maxMatches = len(reply)
+		}
+
+		topMatches := reply[0:maxMatches]
+		for _, match := range topMatches {
 			var highlightedMatch string
 			if useColors {
 				highlightedMatch = highlightMatches(match.Dir.Path, match.MatchOffsets)
@@ -438,6 +444,11 @@ func handleQueryCommand(client *rpc.Client, args []string, useColors bool, quiet
 			}
 			fmt.Printf("  %d: %s\n", match.Id, highlightedMatch)
 		}
+
+		if len(reply) > maxMatches {
+			fmt.Printf("  ... %d other matches not shown", len(reply) - maxMatches)
+		}
+
 	} else if !quiet {
 		color.Fprintf(os.Stderr, "No matches for @{r!}%s@{|}.\n", query)
 	}
