@@ -42,16 +42,23 @@ type QueryMatch struct {
 	MatchOffsets []MatchOffset
 }
 
-// returns the number of matches which occur at the start
-// of a component in the path
+// returns the number of unique matches which occur at the start
+// of a component in the path.
+// eg. For the query 'src':
+//
+//  '/foo/bar/src' => 1
+//  '/foo/bar/baz-src' => 0
+//  '/foo/bar/src/baz/src' => 1
+//
 func (match *QueryMatch) ComponentPrefixMatches() int {
-	prefixMatches := 0
+	matches := map[string]bool{}
 	for _, offset := range match.MatchOffsets {
 		if offset.Start > 0 && match.Dir.Path[offset.Start-1] == '/' {
-			prefixMatches++
+			matchedSegment := match.Dir.Path[offset.Start:offset.Start + offset.Length]
+			matches[matchedSegment] = true
 		}
 	}
-	return prefixMatches
+	return len(matches)
 }
 
 type RecentDirServer struct {
